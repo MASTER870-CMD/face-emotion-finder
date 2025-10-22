@@ -1,0 +1,424 @@
+<!-- 
+
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Emotion Detector</title>
+  <style>
+    body {
+      margin:0;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      height:100vh;
+      background:#0d1117;
+      color:white;
+      font-family:Arial, sans-serif;
+    }
+    .stage {
+      position:relative;
+    }
+    video, canvas {
+      border-radius:10px;
+    }
+    video {
+      transform: scaleX(-1); /* mirror video */
+    }
+    canvas {
+      position:absolute;
+      left:0; top:0;
+      pointer-events:none;
+    }
+    #status {
+      margin-top:10px;
+      text-align:center;
+      font-weight:bold;
+      color:#00e676;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <video id="video" autoplay muted playsinline width="640" height="480"></video>
+    <canvas id="overlay" width="640" height="480"></canvas>
+    <div id="status">Loading models...</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+
+    async function start() {
+      // Load all required models from CDN
+      await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+      await faceapi.nets.faceLandmark68TinyNet.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+      await faceapi.nets.faceExpressionNet.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+      statusEl.textContent = "Models loaded! Starting camera...";
+
+      // Start camera
+      const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+      video.srcObject = stream;
+
+      video.onloadedmetadata = () => {
+        statusEl.textContent = "Running detection...";
+        detectLoop();
+      };
+    }
+
+    async function detectLoop() {
+      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
+
+      const detections = await faceapi
+        .detectAllFaces(video, options)
+        .withFaceLandmarks(true)
+        .withFaceExpressions();
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (detections.length > 0) {
+        detections.forEach(d => {
+          const box = d.detection.box;
+          const landmarks = d.landmarks;
+
+          // Draw green face box
+          ctx.strokeStyle = "#00ff00";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(canvas.width - box.x - box.width, box.y, box.width, box.height);
+
+          // Draw landmarks (dot-to-dot mirrored)
+          ctx.fillStyle = "#ff00ff";
+          landmarks.positions.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(canvas.width - p.x, p.y, 2, 0, 2 * Math.PI);
+            ctx.fill();
+          });
+
+          // Emotion
+          const expr = d.expressions;
+          let best = "neutral", bestVal = 0;
+          for (let k in expr) {
+            if (expr[k] > bestVal) { bestVal = expr[k]; best = k; }
+          }
+          const emotion = best.toUpperCase();
+
+          // Draw label background
+          ctx.font = "24px Arial";
+          const textW = ctx.measureText(emotion).width;
+          const centerX = canvas.width - (box.x + box.width / 2);
+          const textX = centerX - textW / 2;
+          const textY = box.y - 10;
+
+          ctx.fillStyle = "#00ff00";
+          ctx.fillRect(textX - 5, textY - 28, textW + 10, 30);
+
+          // Draw emotion text
+          ctx.fillStyle = "#000";
+          ctx.fillText(emotion, textX, textY - 5);
+        });
+      }
+
+      requestAnimationFrame(detectLoop);
+    }
+
+    start();
+  </script>
+</body>
+</html>
+ -->
+
+
+
+ <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Emotion Detector — box + landmarks + label</title>
+  <style>
+    :root { --bg:#07101a; --accent:#00c853; --muted:#9aa4b2; }
+    body {
+      margin:0;
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:linear-gradient(180deg,#051019,#07121b);
+      color:#e6eef6;
+      font-family: Inter, Arial, sans-serif;
+    }
+    .stage {
+      position:relative;
+      width:760px;
+      padding:14px;
+      background:#0b0f13;
+      border-radius:10px;
+      box-shadow:0 14px 40px rgba(0,0,0,0.6);
+      display:block;
+    }
+    video {
+      width:720px;
+      height:540px;
+      border-radius:8px;
+      background:#000;
+      transform: scaleX(-1); /* mirror video for natural selfie-like view */
+      display:block;
+    }
+    canvas {
+      position:absolute;
+      left:14px; top:14px; /* align to video inside stage */
+      width:720px; height:540px; /* CSS size */
+      pointer-events:none;
+      /* DO NOT mirror canvas via CSS — drawing code handles mirroring for overlays */
+    }
+    #status {
+      margin-top:10px;
+      text-align:center;
+      color:var(--accent);
+      font-weight:700;
+    }
+    .hint { font-size:12px; color:var(--muted); text-align:center; margin-top:6px; }
+
+    /* Res */
+    .stage {
+  position: relative;
+  width: 90%;            /* responsive width */
+  max-width: 760px;      /* don't exceed desktop size */
+  padding: 14px;
+  background: #0b0f13;
+  border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(0,0,0,0.6);
+  display: block;
+}
+
+video, canvas {
+  width: 100%;           /* fill parent stage width */
+  height: auto;          /* maintain aspect ratio */
+  border-radius: 8px;
+}
+
+/* adjust status text and hints for smaller screens */
+#status, .hint {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {  /* tablet */
+  .stage {
+    padding: 10px;
+  }
+  #status, .hint {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {  /* mobile */
+  body {
+    font-size: 14px;
+  }
+  .stage {
+    padding: 6px;
+  }
+  #status, .hint {
+    font-size: 0.7rem;
+  }
+}
+/* Res */
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay" width="720" height="540"></canvas>
+    <div id="status">Loading models...</div>
+    <div class="hint">Run from <strong>localhost</strong>. Allow camera. If models fail, open console for errors.</div>
+  </div>
+
+  <!-- vladmandic fork of face-api (includes TFJS) -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+  <script>
+    (async () => {
+      const VIDEO_W = 720, VIDEO_H = 540;
+      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('overlay');
+      const ctx = canvas.getContext('2d');
+      const statusEl = document.getElementById('status');
+
+      // sanity check
+      if (!window.faceapi) {
+        statusEl.textContent = 'faceapi not loaded!';
+        console.error('faceapi library missing.');
+        return;
+      }
+
+      async function loadModels() {
+        try {
+          statusEl.textContent = 'Loading models (few seconds)…';
+          console.log('Loading models from', MODEL_URL);
+          await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+          await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+          await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+          console.log('Models loaded');
+          statusEl.textContent = 'Models loaded — starting camera...';
+        } catch (err) {
+          console.error('Model load error:', err);
+          statusEl.textContent = 'Model load error — check console';
+          throw err;
+        }
+      }
+
+      async function startCamera() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { width: VIDEO_W, height: VIDEO_H }, audio: false });
+          video.srcObject = stream;
+          await new Promise(resolve => video.onloadedmetadata = resolve);
+          video.play();
+          statusEl.textContent = 'Camera started — running detection...';
+        } catch (err) {
+          console.error('Camera error:', err);
+          statusEl.textContent = 'Camera error — allow camera and run on localhost';
+          throw err;
+        }
+      }
+
+      // helper -> dominant expression
+      function getDominantExpression(expressions) {
+        let bestLabel = 'neutral', bestVal = 0;
+        for (const k of Object.keys(expressions || {})) {
+          if (expressions[k] > bestVal) { bestVal = expressions[k]; bestLabel = k; }
+        }
+        return { label: bestLabel, score: bestVal };
+      }
+
+      // rounded rect helper
+      function roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      // main drawing/detection loop
+      async function runDetection() {
+        // detection options (tune inputSize for speed/accuracy)
+        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 });
+
+        // keep a continuous loop with requestAnimationFrame
+        async function loop() {
+          if (video.paused || video.ended) {
+            requestAnimationFrame(loop);
+            return;
+          }
+
+          // ensure canvas matches actual video resolution (pixel-perfect)
+          if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+          }
+
+          let detections = [];
+          try {
+            detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks(true).withFaceExpressions();
+          } catch (err) {
+            console.error('Detection error:', err);
+          }
+
+          // clear overlay
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          if (detections && detections.length > 0) {
+            statusEl.textContent = `Face(s) detected: ${detections.length}`;
+            // draw each detection
+            for (const det of detections) {
+              const box = det.detection.box; // non-mirrored coordinates
+              const landmarks = det.landmarks;
+              const expr = getDominantExpression(det.expressions);
+              const emotionText = expr.label.toUpperCase();
+
+              // --- 1) Draw mirrored box & landmarks so they visually align with mirrored video ---
+              ctx.save();
+              // flip horizontally for drawing mirroring effect: (scaleX = -1)
+              ctx.setTransform(-1, 0, 0, 1, canvas.width, 0);
+
+              // green bounding box
+              ctx.lineWidth = 2;
+              ctx.strokeStyle = '#00ff00';
+              ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+              // landmarks (dot-to-dot)
+              ctx.fillStyle = '#ff66d9';
+              const pts = landmarks.positions;
+              for (let p of pts) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+              }
+
+              ctx.restore();
+
+              // --- 2) Draw large readable label (NOT mirrored) centered above the face ---
+              // compute visual center on-screen (accounting for video mirroring)
+              const visualCenterX = canvas.width - (box.x + box.width / 2);
+              const labelFontSize = Math.max(18, Math.round(canvas.width * 0.035)); // scale with canvas
+              ctx.font = `${labelFontSize}px Arial`;
+              ctx.textBaseline = 'alphabetic';
+              const metrics = ctx.measureText(emotionText);
+              const textW = metrics.width;
+              const textH = Math.round(labelFontSize * 1.1);
+
+              // label coordinates (clamp to top)
+              const labelX = Math.max(6, Math.round(visualCenterX - textW / 2));
+              const labelY = Math.max(textH + 8, Math.round(box.y - 12));
+
+              // draw rounded background
+              const padX = 10, padY = 6;
+              const bgX = labelX - padX;
+              const bgY = labelY - textH - padY;
+              const bgW = textW + padX * 2;
+              const bgH = textH + padY * 2;
+              ctx.fillStyle = '#00c853';
+              roundRect(ctx, bgX, bgY, bgW, bgH, 6);
+              ctx.fill();
+
+              // text on top (dark for contrast)
+              ctx.fillStyle = '#001a00';
+              ctx.fillText(emotionText, labelX, labelY - 6);
+
+              // optional: small confidence %
+              // ctx.fillStyle = 'rgba(255,255,255,0.85)';
+              // ctx.font = '12px Arial';
+              // ctx.fillText((expr.score*100).toFixed(0)+'%', labelX + textW + 8, labelY - 6);
+            }
+          } else {
+            statusEl.textContent = 'No face detected — position your face in front of the camera';
+          }
+
+          requestAnimationFrame(loop);
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      // run everything
+      try {
+        await loadModels();
+        await startCamera();
+        runDetection();
+      } catch (err) {
+        console.error('Startup failed:', err);
+      }
+
+      // helpful console note
+      console.log('Ready: models loaded and camera started. If detection fails, check console logs.');
+    })();
+  </script>
+</body>
+</html>
